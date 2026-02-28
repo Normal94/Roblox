@@ -1,0 +1,843 @@
+-- ==========================================
+-- MENÚ GATO - V8 (UI Library + Hacks + Emotes Integrados)
+-- ==========================================
+
+local CoreGui = (gethui and gethui()) or game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+-- ==========================================
+-- 1. CONFIGURACIÓN DE RECURSOS (GitHub y Archivos)
+-- ==========================================
+local urlLogo = "https://raw.githubusercontent.com/Normal94/Roblox/refs/heads/main/GATO%20MENU"
+local urlAudio = "https://raw.githubusercontent.com/Normal94/Roblox/refs/heads/main/inicio.mp3"
+local nombreLogo = "LogoGatoV8.png"
+local nombreAudio = "InicioGatoV8.mp3"
+local archivoFavs = "MenuGato_Favoritos.json"
+
+local function decodificarBase64(data)
+    local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    data = string.gsub(data, '[^'..b..'=]', '')
+    return (data:gsub('.', function(x)
+        if (x == '=') then return '' end
+        local r,f='',(b:find(x)-1)
+        for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end
+        return r;
+    end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
+        if (#x ~= 8) then return '' end
+        local c=0
+        for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end
+        return string.char(c)
+    end))
+end
+
+if not isfile(nombreLogo) then 
+    local s, r = pcall(function() return game:HttpGet(urlLogo) end)
+    if s and r then writefile(nombreLogo, decodificarBase64(string.gsub(r, "%s+", ""))) end
+end
+if not isfile(nombreAudio) then 
+    local s, r = pcall(function() return game:HttpGet(urlAudio) end)
+    if s and r then writefile(nombreAudio, r) end
+end
+
+if CoreGui:FindFirstChild("MenuGatoUI") then CoreGui.MenuGatoUI:Destroy() end
+
+-- ==========================================
+-- 2. CORE DE LA LIBRERÍA
+-- ==========================================
+local Library = {}
+
+function Library:CreateWindow(WindowName)
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "MenuGatoUI"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.IgnoreGuiInset = true
+    ScreenGui.Parent = CoreGui
+
+    local fadeInfo = TweenInfo.new(0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    local tweenInfo = TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+
+    -- PANTALLA DE CARGA
+    local LoadingFrame = Instance.new("Frame", ScreenGui)
+    LoadingFrame.Size = UDim2.new(1, 0, 1, 0)
+    LoadingFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+    LoadingFrame.BackgroundTransparency = 1
+    LoadingFrame.ZIndex = 100
+
+    local LogoImage = Instance.new("ImageLabel", LoadingFrame)
+    LogoImage.Size = UDim2.new(0, 160, 0, 160)
+    LogoImage.Position = UDim2.new(0.5, -80, 0.5, -100)
+    LogoImage.BackgroundTransparency = 1
+    LogoImage.Image = isfile(nombreLogo) and getcustomasset(nombreLogo) or "rbxassetid://75857654023109"
+    LogoImage.ImageTransparency = 1
+    LogoImage.ScaleType = Enum.ScaleType.Fit
+    LogoImage.ZIndex = 101
+
+    local LoadingText = Instance.new("TextLabel", LoadingFrame)
+    LoadingText.Size = UDim2.new(0, 200, 0, 30)
+    LoadingText.Position = UDim2.new(0.5, -100, 0.5, 75)
+    LoadingText.BackgroundTransparency = 1
+    LoadingText.Text = "Cargando..."
+    LoadingText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    LoadingText.Font = Enum.Font.GothamBold
+    LoadingText.TextSize = 16
+    LoadingText.TextTransparency = 1
+    LoadingText.ZIndex = 101
+
+    -- BOTÓN MINIMIZADO
+    local OpenButton = Instance.new("TextButton", ScreenGui)
+    OpenButton.Name = "OpenButton"
+    OpenButton.Size = UDim2.new(0, 100, 0, 26)
+    OpenButton.Position = UDim2.new(0.5, -50, 0, 5)
+    OpenButton.BackgroundColor3 = Color3.fromRGB(20, 25, 30)
+    OpenButton.BackgroundTransparency = 1
+    OpenButton.Text = "MENÚ GATO"
+    OpenButton.TextColor3 = Color3.fromHex("#f9bb35")
+    OpenButton.Font = Enum.Font.Gotham
+    OpenButton.TextSize = 12
+    OpenButton.TextTransparency = 1
+    OpenButton.Visible = false
+    Instance.new("UICorner", OpenButton).CornerRadius = UDim.new(0, 8)
+    local OpenStroke = Instance.new("UIStroke", OpenButton)
+    OpenStroke.Color = Color3.fromHex("#f9bb35")
+    OpenStroke.Transparency = 1
+
+    -- VENTANA PRINCIPAL
+    local MainFrame = Instance.new("CanvasGroup", ScreenGui)
+    MainFrame.Size = UDim2.new(0, 480, 0, 380)
+    MainFrame.Position = UDim2.new(0.5, -240, 0.5, -190)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(15, 20, 25)
+    MainFrame.BackgroundTransparency = 0.3
+    MainFrame.GroupTransparency = 1
+    MainFrame.Visible = false
+    Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+    local MainScale = Instance.new("UIScale", MainFrame)
+    MainScale.Scale = 0.8
+
+    local TopBar = Instance.new("Frame", MainFrame)
+    TopBar.Size = UDim2.new(1, 0, 0, 40)
+    TopBar.BackgroundTransparency = 1
+
+    local Title = Instance.new("TextLabel", TopBar)
+    Title.Size = UDim2.new(1, -50, 1, 0)
+    Title.Position = UDim2.new(0, 15, 0, 0)
+    Title.BackgroundTransparency = 1
+    Title.Text = WindowName or "MENÚ GATO"
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 16
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+
+    local CloseBtn = Instance.new("TextButton", TopBar)
+    CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+    CloseBtn.Position = UDim2.new(1, -40, 0, 5)
+    CloseBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    CloseBtn.BackgroundTransparency = 0.6
+    CloseBtn.Text = "X"
+    CloseBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    CloseBtn.Font = Enum.Font.GothamBold
+    CloseBtn.TextSize = 16
+    Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 8)
+
+    local TabBar = Instance.new("ScrollingFrame", MainFrame)
+    TabBar.Size = UDim2.new(1, -20, 0, 35)
+    TabBar.Position = UDim2.new(0, 10, 0, 45)
+    TabBar.BackgroundTransparency = 1
+    TabBar.ScrollBarThickness = 0
+    local TabBarLayout = Instance.new("UIListLayout", TabBar)
+    TabBarLayout.FillDirection = Enum.FillDirection.Horizontal
+    TabBarLayout.Padding = UDim.new(0, 8)
+    TabBarLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+    TabBarLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        TabBar.CanvasSize = UDim2.new(0, TabBarLayout.AbsoluteContentSize.X, 0, 0)
+    end)
+
+    local PageContainer = Instance.new("Frame", MainFrame)
+    PageContainer.Size = UDim2.new(1, -20, 1, -95)
+    PageContainer.Position = UDim2.new(0, 10, 0, 85)
+    PageContainer.BackgroundTransparency = 1
+
+    local dragging, dragInput, dragStart, startPos
+    TopBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging, dragStart, startPos = true, input.Position, MainFrame.Position
+            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+        end
+    end)
+    TopBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            TweenService:Create(MainFrame, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            }):Play()
+        end
+    end)
+
+    CloseBtn.MouseButton1Click:Connect(function()
+        TweenService:Create(MainScale, tweenInfo, {Scale = 0.8}):Play()
+        local t = TweenService:Create(MainFrame, tweenInfo, {GroupTransparency = 1}) 
+        t:Play() 
+        t.Completed:Wait()
+        MainFrame.Visible = false 
+        OpenButton.Visible = true
+        TweenService:Create(OpenButton, tweenInfo, {BackgroundTransparency = 0.5, TextTransparency = 0}):Play()
+        TweenService:Create(OpenStroke, tweenInfo, {Transparency = 0.3}):Play()
+    end)
+
+    OpenButton.MouseButton1Click:Connect(function()
+        TweenService:Create(OpenButton, tweenInfo, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
+        TweenService:Create(OpenStroke, tweenInfo, {Transparency = 1}):Play()
+        task.wait(0.2) 
+        OpenButton.Visible = false 
+        MainFrame.Visible = true
+        TweenService:Create(MainScale, tweenInfo, {Scale = 1}):Play()
+        TweenService:Create(MainFrame, tweenInfo, {GroupTransparency = 0}):Play()
+    end)
+
+    task.spawn(function()
+        if isfile(nombreAudio) then
+            local s = Instance.new("Sound", ScreenGui)
+            s.SoundId = getcustomasset(nombreAudio)
+            s.Volume = 1.5
+            s:Play()
+            s.Ended:Connect(function() s:Destroy() end)
+        end
+        TweenService:Create(LoadingFrame, fadeInfo, {BackgroundTransparency = 0.15}):Play()
+        TweenService:Create(LogoImage, fadeInfo, {ImageTransparency = 0}):Play()
+        TweenService:Create(LoadingText, fadeInfo, {TextTransparency = 0}):Play()
+        task.wait(2.5)
+        TweenService:Create(LoadingFrame, fadeInfo, {BackgroundTransparency = 1}):Play()
+        TweenService:Create(LogoImage, fadeInfo, {ImageTransparency = 1}):Play()
+        TweenService:Create(LoadingText, fadeInfo, {TextTransparency = 1}):Play()
+        task.wait(0.6)
+        LoadingFrame:Destroy()
+        MainFrame.Visible = true
+        TweenService:Create(MainFrame, fadeInfo, {GroupTransparency = 0}):Play()
+        TweenService:Create(MainScale, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
+    end)
+
+    local Window = {}
+    local activeTabBtn, activePage = nil, nil
+
+    function Window:CreateTab(TabName)
+        local btn = Instance.new("TextButton", TabBar)
+        btn.Size = UDim2.new(0, 100, 1, -5)
+        btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        btn.BackgroundTransparency = 0.9
+        btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+        btn.Font = Enum.Font.GothamMedium
+        btn.TextSize = 12
+        btn.Text = TabName
+        btn.AutoButtonColor = false
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+        
+        local page = Instance.new("ScrollingFrame", PageContainer)
+        page.Size = UDim2.new(1, 0, 1, 0)
+        page.BackgroundTransparency = 1
+        page.ScrollBarThickness = 2
+        page.Visible = false
+        local layout = Instance.new("UIListLayout", page)
+        layout.Padding = UDim.new(0, 8)
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+
+        layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            page.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
+        end)
+
+        btn.MouseButton1Click:Connect(function()
+            if activeTabBtn then
+                activeTabBtn.BackgroundTransparency = 0.9
+                activeTabBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+                activePage.Visible = false
+            end
+            activeTabBtn = btn
+            activePage = page
+            btn.BackgroundTransparency = 0.2
+            btn.TextColor3 = Color3.fromRGB(20, 20, 20)
+            page.Visible = true
+        end)
+
+        if not activeTabBtn then 
+            btn.BackgroundTransparency = 0.2 
+            btn.TextColor3 = Color3.fromRGB(20, 20, 20) 
+            page.Visible = true 
+            activeTabBtn = btn 
+            activePage = page 
+        end
+
+        local TabElements = {}
+
+        function TabElements:CreateLabel(text)
+            local lbl = Instance.new("TextLabel", page)
+            lbl.Size = UDim2.new(1, 0, 0, 20)
+            lbl.BackgroundTransparency = 1
+            lbl.Text = text
+            lbl.TextColor3 = Color3.fromHex("#f9bb35")
+            lbl.Font = Enum.Font.GothamBold
+            lbl.TextSize = 13
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+        end
+
+        function TabElements:CreateButton(text, callback)
+            local b = Instance.new("TextButton", page)
+            b.Size = UDim2.new(1, -5, 0, 32)
+            b.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            b.BackgroundTransparency = 0.9
+            b.TextColor3 = Color3.fromRGB(255, 255, 255)
+            b.Font = Enum.Font.GothamMedium
+            b.TextSize = 12
+            b.Text = text
+            Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+            local stroke = Instance.new("UIStroke", b) 
+            stroke.Color = Color3.fromRGB(255,255,255) 
+            stroke.Transparency = 0.85
+            b.MouseButton1Click:Connect(function() pcall(callback) end)
+        end
+
+        function TabElements:CreateToggle(text, callback)
+            local state = false
+            local tBtn = Instance.new("TextButton", page)
+            tBtn.Size = UDim2.new(1, -5, 0, 32)
+            tBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            tBtn.BackgroundTransparency = 0.9
+            tBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            tBtn.Font = Enum.Font.GothamMedium
+            tBtn.TextSize = 12
+            tBtn.Text = text
+            Instance.new("UICorner", tBtn).CornerRadius = UDim.new(0, 8)
+            local stroke = Instance.new("UIStroke", tBtn) 
+            stroke.Color = Color3.fromRGB(255,255,255) 
+            stroke.Transparency = 0.85
+
+            tBtn.MouseButton1Click:Connect(function()
+                state = not state
+                tBtn.Text = state and ("✓ " .. text) or text
+                tBtn.TextColor3 = state and Color3.fromHex("#D4E9D8") or Color3.fromRGB(255, 255, 255)
+                stroke.Color = state and Color3.fromHex("#D4E9D8") or Color3.fromRGB(255, 255, 255)
+                pcall(callback, state)
+            end)
+        end
+
+        function TabElements:CreateSlider(text, min, max, default, callback)
+            local frame = Instance.new("Frame", page)
+            frame.Size = UDim2.new(1, -5, 0, 45)
+            frame.BackgroundTransparency = 1
+
+            local lbl = Instance.new("TextLabel", frame)
+            lbl.Size = UDim2.new(1, 0, 0, 15)
+            lbl.BackgroundTransparency = 1
+            lbl.Text = text .. ": " .. default
+            lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+            lbl.Font = Enum.Font.GothamMedium
+            lbl.TextSize = 12
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+            local bar = Instance.new("TextButton", frame)
+            bar.Size = UDim2.new(1, 0, 0, 8)
+            bar.Position = UDim2.new(0, 0, 0, 25)
+            bar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            bar.BackgroundTransparency = 0.8
+            bar.Text = ""
+            Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
+
+            local fill = Instance.new("Frame", bar)
+            fill.Size = UDim2.new((default - min) / (max - min), 1, 0)
+            fill.BackgroundColor3 = Color3.fromHex("#D4E9D8")
+            Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+            local dragging = false
+            local function updateSlider(input)
+                local pos = math.clamp((input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+                fill.Size = UDim2.new(pos, 0, 1, 0)
+                local val = math.floor(min + (max - min) * pos)
+                lbl.Text = text .. ": " .. val
+                pcall(callback, val)
+            end
+
+            bar.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true updateSlider(input)
+                end
+            end)
+            UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
+            end)
+            UserInputService.InputChanged:Connect(function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then updateSlider(input) end
+            end)
+        end
+
+        function TabElements:CreateInput(placeholder, callback)
+            local box = Instance.new("TextBox", page)
+            box.Size = UDim2.new(1, -5, 0, 32)
+            box.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            box.BackgroundTransparency = 0.9
+            box.TextColor3 = Color3.fromRGB(255, 255, 255)
+            box.Font = Enum.Font.GothamMedium
+            box.TextSize = 12
+            box.PlaceholderText = placeholder
+            box.Text = ""
+            box.ClearTextOnFocus = false
+            Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
+            local stroke = Instance.new("UIStroke", box) 
+            stroke.Color = Color3.fromRGB(255,255,255) 
+            stroke.Transparency = 0.85
+            
+            box.FocusLost:Connect(function(enter) 
+                if enter then pcall(callback, box.Text) end 
+            end)
+        end
+
+        return TabElements, page
+    end
+
+    return Window
+end
+
+-- ==========================================
+-- 3. INTEGRACIÓN DE HACKS (LA LÓGICA)
+-- ==========================================
+local Noclip, InfJump, AutoJump, ESPEnabled, NamesEnabled = false, false, false, false, false
+
+local PlayRemote = ReplicatedStorage:WaitForChild("AnimationReplication", 3) and ReplicatedStorage.AnimationReplication:WaitForChild("PlaySoundBoombox", 3)
+local StopRemote = ReplicatedStorage:WaitForChild("AnimationReplication", 3) and ReplicatedStorage.AnimationReplication:WaitForChild("StopSoundBoombox", 3)
+
+local Menu = Library:CreateWindow("Hide & Seek Ultimate [v8]")
+
+-- PESTAÑA: JUGADOR
+local TabJugador = Menu:CreateTab("Jugador")
+TabJugador:CreateLabel("Movimiento")
+TabJugador:CreateSlider("Velocidad (WalkSpeed)", 16, 250, 16, function(val)
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then 
+        LocalPlayer.Character.Humanoid.WalkSpeed = val 
+    end
+end)
+TabJugador:CreateSlider("Salto (JumpPower)", 50, 300, 50, function(val)
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.UseJumpPower = true
+        LocalPlayer.Character.Humanoid.JumpPower = val
+    end
+end)
+TabJugador:CreateToggle("Salto Infinito", function(val) InfJump = val end)
+TabJugador:CreateToggle("Auto-Salto", function(val) AutoJump = val end)
+TabJugador:CreateToggle("Noclip (Atravesar Paredes)", function(val) Noclip = val end)
+
+TabJugador:CreateLabel("Auto-Farm")
+TabJugador:CreateButton("Obtener Todas las Monedas", function()
+    for _, v in pairs(workspace:GetDescendants()) do
+        if (v.Name == "Coin" or v.Name == "Credit" or v.Name == "Money") and (v:IsA("BasePart") or v:IsA("MeshPart")) then
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                firetouchinterest(LocalPlayer.Character.HumanoidRootPart, v, 0) 
+                firetouchinterest(LocalPlayer.Character.HumanoidRootPart, v, 1)
+            end
+        end
+    end
+end)
+
+-- PESTAÑA: VISUALES
+local TabVisuales = Menu:CreateTab("Visuales")
+TabVisuales:CreateLabel("Configuración ESP")
+TabVisuales:CreateToggle("ESP Jugadores (Highlight)", function(val) ESPEnabled = val end)
+TabVisuales:CreateToggle("Mostrar Nombres y Distancia", function(val) NamesEnabled = val end)
+
+-- PESTAÑA: TELEPORT
+local TabTeleport = Menu:CreateTab("Teleport")
+TabTeleport:CreateLabel("Teletransportación")
+local PlayerToTeleport = ""
+TabTeleport:CreateInput("Escribe el nombre del jugador...", function(texto) PlayerToTeleport = texto end)
+TabTeleport:CreateButton("Teletransportarse al Jugador", function()
+    local target = Players:FindFirstChild(PlayerToTeleport)
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame
+        end
+    end
+end)
+
+-- PESTAÑA: MÚSICA
+local TabMusica = Menu:CreateTab("Música")
+TabMusica:CreateLabel("Control de Boombox")
+local BoomboxId = 0
+TabMusica:CreateInput("ID del Audio (Ej: 142376088)", function(texto) BoomboxId = tonumber(texto) or 0 end)
+TabMusica:CreateButton("▶️ Reproducir Música", function()
+    if BoomboxId > 0 and PlayRemote then 
+        pcall(function() StopRemote:FireServer() end) 
+        task.wait(0.1) 
+        pcall(function() PlayRemote:FireServer(BoomboxId) end) 
+    end
+end)
+TabMusica:CreateButton("⏹ Detener Música", function()
+    if StopRemote then pcall(function() StopRemote:FireServer() end) end 
+end)
+
+-- ==========================================
+-- 4. INTEGRACIÓN PESTAÑA DE EMOTES
+-- ==========================================
+local TabEmotes, PageEmotes = Menu:CreateTab("Emotes")
+
+local ContentArea = Instance.new("Frame", PageEmotes)
+ContentArea.Size = UDim2.new(1, -5, 0, 270)
+ContentArea.BackgroundTransparency = 1
+
+-- VISTA MAIN
+local ViewMain = Instance.new("Frame", ContentArea)
+ViewMain.Size = UDim2.new(1, 0, 1, 0)
+ViewMain.BackgroundTransparency = 1
+
+local BtnBuscarMenu = Instance.new("TextButton", ViewMain)
+BtnBuscarMenu.Size = UDim2.new(0.48, 0, 0, 32)
+BtnBuscarMenu.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+BtnBuscarMenu.BackgroundTransparency = 0.85
+BtnBuscarMenu.Text = "Buscar 🔎"
+BtnBuscarMenu.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnBuscarMenu.Font = Enum.Font.GothamSemibold
+BtnBuscarMenu.TextSize = 13
+Instance.new("UICorner", BtnBuscarMenu).CornerRadius = UDim.new(0, 8)
+
+local BtnDetener = Instance.new("TextButton", ViewMain)
+BtnDetener.Size = UDim2.new(0.48, 0, 0, 32)
+BtnDetener.Position = UDim2.new(0.52, 0, 0, 0)
+BtnDetener.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+BtnDetener.BackgroundTransparency = 0.5
+BtnDetener.Text = "Detener 🛑"
+BtnDetener.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnDetener.Font = Enum.Font.GothamSemibold
+BtnDetener.TextSize = 13
+Instance.new("UICorner", BtnDetener).CornerRadius = UDim.new(0, 8)
+
+local TitleFavs = Instance.new("TextLabel", ViewMain)
+TitleFavs.Size = UDim2.new(1, 0, 0, 20)
+TitleFavs.Position = UDim2.new(0, 0, 0, 42)
+TitleFavs.BackgroundTransparency = 1
+TitleFavs.Text = "Favoritos ⭐"
+TitleFavs.TextColor3 = Color3.fromRGB(200, 200, 200)
+TitleFavs.Font = Enum.Font.GothamBold
+TitleFavs.TextSize = 14
+TitleFavs.TextXAlignment = Enum.TextXAlignment.Left
+
+local ScrollFavs = Instance.new("ScrollingFrame", ViewMain)
+ScrollFavs.Size = UDim2.new(1, 0, 1, -65)
+ScrollFavs.Position = UDim2.new(0, 0, 0, 65)
+ScrollFavs.BackgroundTransparency = 1
+ScrollFavs.ScrollBarThickness = 2
+local LayoutFavs = Instance.new("UIListLayout", ScrollFavs)
+LayoutFavs.Padding = UDim.new(0, 5)
+
+-- VISTA BUSCADOR
+local ViewSearch = Instance.new("Frame", ContentArea)
+ViewSearch.Size = UDim2.new(1, 0, 1, 0)
+ViewSearch.BackgroundTransparency = 1
+ViewSearch.Visible = false
+
+local BtnVolver = Instance.new("TextButton", ViewSearch)
+BtnVolver.Size = UDim2.new(0, 32, 0, 32)
+BtnVolver.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+BtnVolver.BackgroundTransparency = 0.85
+BtnVolver.Text = "<"
+BtnVolver.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnVolver.Font = Enum.Font.GothamBold
+BtnVolver.TextSize = 14
+Instance.new("UICorner", BtnVolver).CornerRadius = UDim.new(0, 8)
+
+local InputBuscador = Instance.new("TextBox", ViewSearch)
+InputBuscador.Size = UDim2.new(1, -75, 0, 32)
+InputBuscador.Position = UDim2.new(0, 38, 0, 0)
+InputBuscador.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+InputBuscador.BackgroundTransparency = 0.5
+InputBuscador.Text = ""
+InputBuscador.PlaceholderText = "Buscar en tienda Roblox..."
+InputBuscador.TextColor3 = Color3.fromRGB(255, 255, 255)
+InputBuscador.Font = Enum.Font.Gotham
+InputBuscador.TextSize = 12
+Instance.new("UICorner", InputBuscador).CornerRadius = UDim.new(0, 8)
+
+local BtnEjecutarBusqueda = Instance.new("TextButton", ViewSearch)
+BtnEjecutarBusqueda.Size = UDim2.new(0, 32, 0, 32)
+BtnEjecutarBusqueda.Position = UDim2.new(1, -32, 0, 0)
+BtnEjecutarBusqueda.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+BtnEjecutarBusqueda.BackgroundTransparency = 0.85
+BtnEjecutarBusqueda.Text = "🔎"
+BtnEjecutarBusqueda.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnEjecutarBusqueda.Font = Enum.Font.GothamBold
+BtnEjecutarBusqueda.TextSize = 14
+Instance.new("UICorner", BtnEjecutarBusqueda).CornerRadius = UDim.new(0, 8)
+
+local InputManual = Instance.new("TextBox", ViewSearch)
+InputManual.Size = UDim2.new(1, -40, 0, 30)
+InputManual.Position = UDim2.new(0, 0, 0, 42)
+InputManual.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+InputManual.BackgroundTransparency = 0.5
+InputManual.Text = ""
+InputManual.PlaceholderText = "Agregar ID Manual (Ej: 5230661597)"
+InputManual.TextColor3 = Color3.fromRGB(255, 255, 255)
+InputManual.Font = Enum.Font.Gotham
+InputManual.TextSize = 11
+Instance.new("UICorner", InputManual).CornerRadius = UDim.new(0, 6)
+
+local BtnAddManual = Instance.new("TextButton", ViewSearch)
+BtnAddManual.Size = UDim2.new(0, 35, 0, 30)
+BtnAddManual.Position = UDim2.new(1, -35, 0, 42)
+BtnAddManual.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+BtnAddManual.BackgroundTransparency = 0.5
+BtnAddManual.Text = "+"
+BtnAddManual.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnAddManual.Font = Enum.Font.GothamBold
+BtnAddManual.TextSize = 16
+Instance.new("UICorner", BtnAddManual).CornerRadius = UDim.new(0, 6)
+
+local ScrollRec = Instance.new("ScrollingFrame", ViewSearch)
+ScrollRec.Size = UDim2.new(1, 0, 1, -85)
+ScrollRec.Position = UDim2.new(0, 0, 0, 85)
+ScrollRec.BackgroundTransparency = 1
+ScrollRec.ScrollBarThickness = 2
+local LayoutRec = Instance.new("UIListLayout", ScrollRec)
+LayoutRec.Padding = UDim.new(0, 5)
+
+BtnBuscarMenu.MouseButton1Click:Connect(function() ViewMain.Visible = false; ViewSearch.Visible = true end)
+BtnVolver.MouseButton1Click:Connect(function() ViewSearch.Visible = false; ViewMain.Visible = true end)
+
+local reproduciendoTrack = nil
+
+local function GuardarFavoritos()
+    local tablaFavs = {}
+    for _, item in pairs(ScrollFavs:GetChildren()) do
+        if item:IsA("Frame") then
+            local emoteID = item:GetAttribute("EmoteID")
+            if emoteID then
+                table.insert(tablaFavs, {id = emoteID, nombre = item.Name})
+            end
+        end
+    end
+    local s, r = pcall(function() return HttpService:JSONEncode(tablaFavs) end)
+    if s and r then writefile(archivoFavs, r) end
+end
+
+local function obtenerAnimacionReal(assetId)
+    local realId = nil
+    pcall(function()
+        local objs = game:GetObjects("rbxassetid://" .. assetId)
+        if objs and objs[1] then
+            for _, v in pairs(objs[1]:GetDescendants()) do
+                if v:IsA("Animation") then realId = v.AnimationId break end
+            end
+            if not realId and objs[1]:IsA("Animation") then realId = objs[1].AnimationId end
+            objs[1]:Destroy()
+        end
+    end)
+    return realId or ("rbxassetid://" .. assetId)
+end
+
+local function reproducirEmote(id)
+    local char = LocalPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+    
+    if reproduciendoTrack then reproduciendoTrack:Stop() end
+    for _, track in pairs(animator:GetPlayingAnimationTracks()) do track:Stop() end
+    
+    local anim = Instance.new("Animation")
+    anim.AnimationId = obtenerAnimacionReal(id)
+    
+    pcall(function()
+        reproduciendoTrack = animator:LoadAnimation(anim)
+        reproduciendoTrack.Looped = true
+        reproduciendoTrack:Play()
+    end)
+end
+
+BtnDetener.MouseButton1Click:Connect(function()
+    if reproduciendoTrack then reproduciendoTrack:Stop() end
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("Humanoid") then
+        local anims = char.Humanoid:FindFirstChild("Animator")
+        if anims then for _, t in pairs(anims:GetPlayingAnimationTracks()) do t:Stop() end end
+    end
+end)
+
+local function crearItem(id, nombre, enFavs, padre)
+    local Item = Instance.new("Frame", padre)
+    Item.Name = nombre
+    Item:SetAttribute("EmoteID", tostring(id))
+    Item.Size = UDim2.new(1, -10, 0, 35)
+    Item.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Item.BackgroundTransparency = 0.95
+    Instance.new("UICorner", Item).CornerRadius = UDim.new(0, 6)
+    
+    local PlayBtn = Instance.new("TextButton", Item)
+    PlayBtn.Size = UDim2.new(1, -40, 1, 0)
+    PlayBtn.BackgroundTransparency = 1
+    PlayBtn.Text = "  ▶ " .. nombre
+    PlayBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    PlayBtn.Font = Enum.Font.Gotham
+    PlayBtn.TextSize = 12
+    PlayBtn.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local FavBtn = Instance.new("TextButton", Item)
+    FavBtn.Size = UDim2.new(0, 30, 0, 30)
+    FavBtn.Position = UDim2.new(1, -35, 0, 2)
+    FavBtn.BackgroundTransparency = 1
+    FavBtn.Text = enFavs and "⭐" or "☆"
+    FavBtn.TextColor3 = enFavs and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(180, 180, 180)
+    FavBtn.TextSize = 16
+    
+    PlayBtn.MouseButton1Click:Connect(function() reproducirEmote(id) end)
+    
+    FavBtn.MouseButton1Click:Connect(function()
+        if not enFavs then
+            FavBtn.Text = "⭐"; FavBtn.TextColor3 = Color3.fromRGB(255, 215, 0)
+            crearItem(id, nombre, true, ScrollFavs)
+            GuardarFavoritos()
+        else
+            Item:Destroy()
+            task.defer(GuardarFavoritos)
+        end
+    end)
+end
+
+BtnAddManual.MouseButton1Click:Connect(function()
+    local id = InputManual.Text
+    if id ~= "" and tonumber(id) then
+        crearItem(id, "ID: " .. id, true, ScrollFavs)
+        GuardarFavoritos()
+        InputManual.Text = ""
+    end
+end)
+
+local cursorActual = ""
+local terminoActual = ""
+local function buscarEmotesWeb(query, cursor)
+    local url = "https://catalog.roproxy.com/v1/search/items/details?Category=12&Subcategory=39&Limit=10"
+    if query ~= "" then url = url .. "&Keyword=" .. HttpService:UrlEncode(query) end
+    if cursor ~= "" then url = url .. "&Cursor=" .. cursor end
+
+    pcall(function()
+        local req = game:HttpGet(url)
+        local data = HttpService:JSONDecode(req)
+        cursorActual = data.nextPageCursor or ""
+        
+        for _, v in ipairs(data.data) do
+            crearItem(v.id, v.name, false, ScrollRec)
+        end
+        
+        if cursorActual ~= "" then
+            local BtnMas = Instance.new("TextButton", ScrollRec)
+            BtnMas.Size = UDim2.new(1, -10, 0, 30)
+            BtnMas.BackgroundColor3 = Color3.fromRGB(40, 100, 200)
+            BtnMas.BackgroundTransparency = 0.5
+            BtnMas.Text = "Cargar más..."
+            BtnMas.TextColor3 = Color3.fromRGB(255, 255, 255)
+            Instance.new("UICorner", BtnMas).CornerRadius = UDim.new(0, 6)
+            BtnMas.MouseButton1Click:Connect(function()
+                BtnMas:Destroy()
+                buscarEmotesWeb(terminoActual, cursorActual)
+            end)
+        end
+    end)
+end
+
+BtnEjecutarBusqueda.MouseButton1Click:Connect(function()
+    for _, v in pairs(ScrollRec:GetChildren()) do if v:IsA("Frame") or v:IsA("TextButton") then v:Destroy() end end
+    terminoActual = InputBuscador.Text
+    task.spawn(function() buscarEmotesWeb(terminoActual, "") end)
+end)
+
+LayoutRec:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() ScrollRec.CanvasSize = UDim2.new(0, 0, 0, LayoutRec.AbsoluteContentSize.Y + 10) end)
+LayoutFavs:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() ScrollFavs.CanvasSize = UDim2.new(0, 0, 0, LayoutFavs.AbsoluteContentSize.Y + 10) end)
+
+local function CargarFavoritosGuardados()
+    if isfile(archivoFavs) then
+        pcall(function()
+            local data = readfile(archivoFavs)
+            local favs = HttpService:JSONDecode(data)
+            for _, v in pairs(favs) do
+                crearItem(v.id, v.nombre, true, ScrollFavs)
+            end
+        end)
+    end
+end
+
+task.spawn(function()
+    CargarFavoritosGuardados()
+    buscarEmotesWeb("", "")
+end)
+
+-- ==========================================
+-- 5. EVENTOS DE RUNSERVICE (El motor del hack)
+-- ==========================================
+UserInputService.JumpRequest:Connect(function()
+    if InfJump and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then 
+        LocalPlayer.Character.Humanoid:ChangeState("Jumping") 
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if AutoJump and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then 
+        LocalPlayer.Character.Humanoid.Jump = true 
+    end
+    
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local highlight = plr.Character:FindFirstChild("HighlightESP")
+            
+            if ESPEnabled then
+                if not highlight then 
+                    highlight = Instance.new("Highlight", plr.Character) 
+                    highlight.Name = "HighlightESP" 
+                end
+                highlight.FillTransparency = 0.5 
+                highlight.OutlineTransparency = 0
+                highlight.FillColor = Color3.fromRGB(255, 0, 0)
+            elseif highlight then 
+                highlight:Destroy() 
+            end
+
+            local head = plr.Character:FindFirstChild("Head")
+            if head then
+                local bg = head:FindFirstChild("NameTagESP")
+                if NamesEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    if not bg then
+                        bg = Instance.new("BillboardGui", head) 
+                        bg.Name = "NameTagESP" 
+                        bg.Size = UDim2.new(0, 200, 0, 50) 
+                        bg.StudsOffset = Vector3.new(0, 2, 0) 
+                        bg.AlwaysOnTop = true
+                        
+                        local lbl = Instance.new("TextLabel", bg) 
+                        lbl.BackgroundTransparency = 1 
+                        lbl.Size = UDim2.new(1, 0, 1, 0) 
+                        lbl.TextColor3 = Color3.new(1, 1, 1) 
+                        lbl.Font = Enum.Font.SourceSansBold 
+                        lbl.TextSize = 14 
+                        lbl.TextStrokeTransparency = 0
+                    end
+                    local dist = (LocalPlayer.Character.HumanoidRootPart.Position - head.Position).Magnitude
+                    bg:FindFirstChildOfClass("TextLabel").Text = plr.Name .. "\n[" .. math.floor(dist) .. "m]"
+                elseif bg then 
+                    bg:Destroy() 
+                end
+            end
+        end
+    end
+end)
+
+RunService.Stepped:Connect(function()
+    if Noclip and LocalPlayer.Character then
+        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do 
+            if part:IsA("BasePart") then part.CanCollide = false end 
+        end
+    end
+end)
