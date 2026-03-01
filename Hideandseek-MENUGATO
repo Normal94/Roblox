@@ -1,15 +1,6 @@
 -- ==========================================
 -- MENÚ GATO - V8 (UI Library + Hacks + Emotes Integrados)
--- ==========================================
-
-local CoreGui = (gethui and gethui()) or game:GetService("CoreGui")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
+-- ======= 
 
 -- ==========================================
 -- 1. CONFIGURACIÓN DE RECURSOS (GitHub y Archivos)
